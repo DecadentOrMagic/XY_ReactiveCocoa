@@ -11,7 +11,7 @@
 #import "TwoViewController.h"
 
 @interface OneViewController ()
-
+@property (nonatomic, strong) RACCommand *command;
 @end
 
 @implementation OneViewController
@@ -22,6 +22,9 @@
     
     self.title = @"OneVC";
 }
+
+
+
 
 #pragma mark - RACSiganl 简单使用
 - (IBAction)RACSiganlSimpleUse:(id)sender {
@@ -85,6 +88,8 @@
      *  RACDisposable:用于取消订阅或者清理资源,当信号发送完成或者发送错误的时候,就会触发它
      */
 }
+
+
 
 
 #pragma mark - RACSubject 简单使用
@@ -181,6 +186,8 @@
 }
 
 
+
+
 // 步骤三:在第一个控制器(OneVC)中,监听跳转按钮,给第二个控制器的代理信号赋值,并且监听.
 #pragma mark - RACSubject 替代代理
 - (IBAction)pushTwoVC:(id)sender {
@@ -200,6 +207,154 @@
     
     [self.navigationController pushViewController:twoVC animated:YES];
 }
+
+
+
+
+#pragma mark - RACSequence 和 RACTuple 简单使用
+- (IBAction)RACSequenceAndRACTupleSimpleUse:(id)sender {
+    /**
+     *  RACTuple:元组类,类似NSArray,用来包装值.
+     *
+     *  RACSequence:RAC中的集合类,用于代替NSArray,NSDictionary,可以使用他来快速遍历数组和字典
+     *  使用场景:1.字典转模型
+     */
+    
+    // 1.遍历数组
+    NSArray *numbers = @[@1,@2,@3,@4];
+    
+    // 这里其实是三步
+    // 第一步:把数组转化成集合RACSequence numbers.rac_sequence
+    // 第二步:把集合RACSequence转换RACSignal信号类,numbers.rac_sequence.signal
+    // 第三步:订阅信号,激活信号,会自动把集合中的所有值,遍历出来
+    [numbers.rac_sequence.signal subscribeNext:^(id x) {
+        NSLog(@"%@",x);
+    }];
+    
+    // 2.遍历字典,遍历出来的键值对会包装成RATuple(元组对象)
+    NSDictionary *dict = @{@"name":@"xmg",@"age":@"18"};
+    [dict.rac_sequence.signal subscribeNext:^(id x) {
+        // 解包元组,会把元组的值,按顺序给参数里面的变量赋值
+        RACTupleUnpack(NSString *key,NSString *value) = x;
+        
+        // 相当于以下写法
+//        NSString *key = x[0];
+//        NSString *value = x[1];
+        
+        NSLog(@"%@ %@",key,value);
+    }];
+    
+//    // 3.字典转模型
+//    // 3.1 OC写法
+//    NSString *filePath = [[NSBundle mainBundle] pathForResource:@"" ofType:nil];
+//    NSArray *dictArr = [NSArray arrayWithContentsOfFile:filePath];
+//    NSMutableArray *items = [NSMutableArray array];
+//    for (NSDictionary *dict in dictArr) {
+//        
+//    }
+}
+
+
+
+
+#pragma mark - RACCommand 简单使用
+- (IBAction)RACCommandSimpleUse:(id)sender {
+    /**
+     *  RACCommand:RAC中用于处理事件的类,可以把事件如何处理,事件中的数据如何传递,包装到这个类中,他可以很方便的监控事件的执行过程
+     *  使用场景:监听按钮点击,网络请求
+     *
+     *
+     **********************************************************************
+     *
+     *
+     *  一.RACCommand使用步骤:
+     *  1.创建命令 initWithSignalBlock:(RACSignal * (^)(id input))signalBlock
+     *  2.在signalBlock中，创建RACSignal，并且作为signalBlock的返回值
+     *  3.执行命令 - (RACSignal *)execute:(id)input
+     *
+     *
+     **********************************************************************
+     *
+     *
+     *  二.RACCommand使用注意:
+     *  1.singnalBlock必须要返回一个信号,不能传nil.
+     *  2.如果不想要传递信号,直接创建空的信号[RACSignal empty];
+     *  3.RACCommand中信号如果数据传递完,必须调用[subscriber sendCompleted],这时命令才会执行完毕,否则永远处于执行中.
+     *  4.RACCommand需要被强引用,否则接收不到RACCommand中的信号,因此RACCommand中的信号是延迟发送的.
+     *
+     *
+     **********************************************************************
+     *
+     *
+     *  三.RACCommand设计思想:内部signalBlock为什么要返回一个信号?这个信号有什么用?
+     *  1.在RAC开发中,通常会把网络请求封装到RAACommand,直接执行某个RACCommand就能发送请求.
+     *  2.在RACCommand内部请求到数据的时候,需要把请求的数据传递给外界,这个时候就需要通过signalBlock返回的信号传递了
+     *
+     *
+     **********************************************************************
+     *
+     *
+     *  四.如何拿到RACCommand中返回信号发出的数据.
+     *  1.RACCommand有个执行信号源executionSignals,这个是signal of signals(信号的信号),意思是信号发出的数据是信号,不是普通的类型.
+     *  2.订阅executionSignals就能拿到RACCommand中返回的信号,然后订阅signalBlock返回的信号,就能获取发出的值
+     *
+     *
+     *  五.监听当前命令是否正在执行executing
+     *
+     *
+     *  六.使用场景,监听按钮点击,网络请求
+     */
+    
+    // 1.创建命令
+    RACCommand *command = [[RACCommand alloc] initWithSignalBlock:^RACSignal *(id input) {
+        NSLog(@"执行命令");
+        
+        // 创建空信号,必须返回信号
+//        return [RACSignal empty];
+        
+        // 2.创建信号,用来传递数据
+        return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+            [subscriber sendNext:@"请求数据"];
+            
+            // 注意:数据传递完,最好调用sendCompleted,这时命令才执行完毕
+            [subscriber sendCompleted];
+            
+            return nil;
+        }];
+    }];
+    
+    // 强引用命令,不要被销毁,否则接收不到数据
+    _command = command;
+    
+    // 3.订阅RACCommand中的信号
+    [command.executionSignals subscribeNext:^(id x) {
+        [x subscribeNext:^(id x) {
+            NSLog(@"%@",x);
+        }];
+    }];
+    
+    // RAC高级用法
+    // switchToLatest:用于signal of signals,获取signal of signals发出的最新信号,也就是可以直接拿到RACCommand中的信号
+    [command.executionSignals.switchToLatest subscribeNext:^(id x) {
+        NSLog(@"%@",x);
+    }];
+    
+    // 4.监听命令是否执行完毕,默认会来一次,可以直接跳过,skip表示跳过第一次信号
+    [[command.executing skip:1] subscribeNext:^(id x) {
+        if ([x boolValue] == YES) {
+            // 正在执行
+            NSLog(@"正在执行");
+        }
+        else {
+            // 执行完成
+            NSLog(@"执行完成");
+        }
+    }];
+    
+    // 5.执行命令
+    [self.command execute:@1];
+}
+
 
 
 
